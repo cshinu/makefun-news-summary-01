@@ -8,12 +8,32 @@
 // (the grader's container provides /output; locally, point the variable
 // at a scratch folder, e.g. MAKEFUN_OUTPUT_DIR=out).
 
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
+const summaryPath = join(here, 'summary.txt');
+if (!existsSync(summaryPath)) {
+  throw new Error(`summary.txt missing: ${summaryPath}`);
+}
+if (statSync(summaryPath).size === 0) {
+  throw new Error(`summary.txt is empty: ${summaryPath}`);
+}
+
 mkdirSync(outDir, { recursive: true });
-copyFileSync(join(here, 'summary.txt'), join(outDir, 'entry.txt'));
+copyFileSync(summaryPath, join(outDir, 'entry.txt'));
+
+// Verify the copy: read back entry.txt and compare its byte length with
+// the source, so a truncated or failed copy fails loudly instead of
+// silently shipping a wrong file.
+const destPath = join(outDir, 'entry.txt');
+const copied = readFileSync(destPath);
+const sourceBytes = statSync(summaryPath).size;
+if (copied.length !== sourceBytes) {
+  throw new Error(`entry.txt size mismatch: copied ${copied.length} bytes, source ${sourceBytes} bytes`);
+}
+const words = copied.toString('utf8').trim().split(/\s+/).filter(Boolean).length;
+console.error(`copied ${copied.length} bytes (${words} words) to ${destPath}`);
